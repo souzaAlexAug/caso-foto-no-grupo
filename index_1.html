@@ -1,0 +1,1366 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>O Caso da Foto no Grupo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+/* Layout: tela cheia de jogo (canvas) com interface sobreposta; visual único "pátio de escola + quadro-verde + caderno pautado" */
+:root {
+  --quadro: #24493b;
+  --quadro-2: #1b382d;
+  --giz: #f5f2e6;
+  --sol: #ffc93c;
+  --sol-escuro: #e0a915;
+  --tijolo: #b9553c;
+  --tinta: #1f2a44;
+  --tinta-suave: #55607a;
+  --papel: #fffdf6;
+  --pauta: #c6dbef;
+  --margem: #e27070;
+  --ok: #2f9e62;
+  --nao: #d24a4a;
+  --sombra: rgba(20, 28, 45, .28);
+  --f-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --f-texto: "Atkinson Hyperlegible", "Verdana", system-ui, sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden; background: #6fa552; color: var(--tinta);
+  font-family: var(--f-texto); font-size: 17px; line-height: 1.45;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+}
+#jogo { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--sol); outline-offset: 2px; }
+
+/* barra superior */
+.topo {
+  position: fixed; left: 0; right: 0; top: env(safe-area-inset-top, 0px);
+  display: flex; gap: 8px; align-items: flex-start; justify-content: space-between;
+  padding: 10px 16px; pointer-events: none; z-index: 5;
+}
+.objetivo {
+  pointer-events: auto; background: var(--quadro); color: var(--giz);
+  border: 3px solid #8a6a3f; border-radius: 10px; padding: 7px 12px; max-width: min(520px, 62vw);
+  box-shadow: 0 4px 0 var(--sombra); min-width: 0;
+}
+.objetivo small { display: block; font-family: var(--f-display); font-weight: 600; color: var(--sol); letter-spacing: .06em; text-transform: uppercase; font-size: 12px; }
+.objetivo span { font-size: 15px; }
+.acoes-topo { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+.btn-topo {
+  background: var(--papel); color: var(--tinta); border: 2px solid var(--tinta); border-radius: 10px;
+  padding: 7px 12px; font-family: var(--f-display); font-weight: 600; font-size: 15px; box-shadow: 0 3px 0 var(--tinta);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn-topo:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--tinta); }
+.btn-topo .num { background: var(--sol); border-radius: 6px; padding: 0 6px; font-variant-numeric: tabular-nums; }
+
+/* avisos */
+.avisos { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 76px); transform: translateX(-50%); display: grid; gap: 6px; z-index: 30; width: min(440px, calc(100% - 32px)); pointer-events: none; }
+.aviso { background: var(--tinta); color: #fff; padding: 9px 14px; border-radius: 10px; font-family: var(--f-display); font-weight: 600; text-align: center; box-shadow: 0 4px 0 var(--sombra); animation: entra .25s ease-out; }
+.aviso.pista { background: var(--ok); }
+.aviso.erro { background: var(--nao); }
+@keyframes entra { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* botão de interação */
+.interagir {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translateX(-50%);
+  background: var(--sol); color: var(--tinta); border: 3px solid var(--tinta); border-radius: 999px;
+  padding: 10px 20px; font-family: var(--f-display); font-weight: 700; font-size: 18px; box-shadow: 0 4px 0 var(--tinta); z-index: 6;
+  max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.interagir kbd { background: var(--papel); border: 2px solid var(--tinta); border-radius: 6px; padding: 0 6px; margin-right: 6px; font-family: var(--f-display); }
+.toque .interagir { left: auto; right: 16px; transform: none; bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); padding: 16px 22px; }
+.toque .interagir kbd { display: none; }
+
+/* joystick */
+.joy { position: fixed; width: 120px; height: 120px; border-radius: 50%; background: rgba(31,42,68,.18); border: 3px solid rgba(31,42,68,.35); z-index: 4; pointer-events: none; transform: translate(-50%, -50%); }
+.joy i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: var(--papel); border: 3px solid var(--tinta); }
+.dica-toque { position: fixed; left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); background: rgba(255,253,246,.85); border-radius: 10px; padding: 6px 10px; font-size: 13px; z-index: 4; pointer-events: none; }
+
+/* caixa de diálogo: quadro-verde */
+.dialogo {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  width: min(760px, calc(100% - 32px)); background: var(--quadro); color: var(--giz);
+  border: 6px solid #8a6a3f; border-radius: 14px; padding: 14px 18px 16px; z-index: 10;
+  box-shadow: 0 8px 0 var(--sombra), inset 0 0 40px rgba(0,0,0,.25);
+}
+.dialogo .quem { font-family: var(--f-display); font-weight: 700; font-size: 21px; color: var(--sol); }
+.dialogo .quem small { font-family: var(--f-texto); font-weight: 400; color: #bcd3c6; font-size: 14px; margin-left: 8px; }
+.dialogo .fala { font-size: 19px; min-height: 3.2em; margin-top: 4px; }
+.dialogo .seguir { display: flex; justify-content: flex-end; margin-top: 6px; }
+.btn-giz { background: transparent; color: var(--giz); border: 2px dashed rgba(245,242,230,.7); border-radius: 10px; padding: 6px 14px; font-family: var(--f-display); font-weight: 600; font-size: 16px; }
+.escolhas { display: grid; gap: 8px; margin-top: 10px; }
+.escolha { text-align: left; background: var(--papel); color: var(--tinta); border: 2px solid var(--tinta); border-radius: 10px; padding: 10px 14px; font-size: 16px; box-shadow: 0 3px 0 var(--tinta); }
+.escolha:hover { background: #fff3c9; }
+.escolha:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--tinta); }
+
+/* janelas */
+.fundo-modal { position: fixed; inset: 0; background: rgba(20,28,45,.55); z-index: 20; display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.folha {
+  width: min(720px, 100%); max-height: calc(100% - 8px); overflow-y: auto; background: var(--papel);
+  border-radius: 14px; box-shadow: 0 10px 0 var(--sombra); position: relative; min-width: 0;
+  background-image: linear-gradient(transparent 31px, var(--pauta) 32px); background-size: 100% 32px;
+  padding: 20px 22px 20px 54px;
+}
+.folha::before { content: ""; position: absolute; left: 38px; top: 0; bottom: 0; width: 2px; background: var(--margem); }
+.folha h2 { font-family: var(--f-display); font-weight: 700; font-size: 28px; margin: 0 0 4px; line-height: 1.15; text-wrap: balance; }
+.folha .sub { color: var(--tinta-suave); margin: 0 0 14px; }
+.folha p { margin: 0 0 12px; }
+.linha-botoes { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+.btn { background: var(--sol); color: var(--tinta); border: 2px solid var(--tinta); border-radius: 10px; padding: 10px 18px; font-family: var(--f-display); font-weight: 700; font-size: 17px; box-shadow: 0 3px 0 var(--tinta); }
+.btn.sec { background: var(--papel); }
+.btn.ok { background: var(--ok); color: #fff; }
+.btn.nao { background: var(--nao); color: #fff; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--tinta); }
+
+/* capa */
+.capa { background: var(--quadro); color: var(--giz); background-image: none; padding: 26px 26px 22px; border: 8px solid #8a6a3f; }
+.capa::before { display: none; }
+.capa .selo { display: inline-block; font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--quadro); background: var(--sol); border-radius: 6px; padding: 2px 8px; }
+.capa h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(34px, 7vw, 54px); line-height: 1; margin: 12px 0 10px; text-wrap: balance; }
+.capa h1 em { font-style: normal; color: var(--sol); }
+.capa p { color: #dfe9e2; max-width: 60ch; }
+.capa .controles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 16px 0 4px; }
+.capa .controles div { border: 2px dashed rgba(245,242,230,.5); border-radius: 10px; padding: 8px 12px; font-size: 15px; }
+.capa .controles b { font-family: var(--f-display); color: var(--sol); display: block; }
+
+/* caderno */
+.pistas { display: grid; gap: 0; }
+.pista { padding: 0 0 32px; position: relative; min-height: 64px; }
+.pista h3 { font-family: var(--f-display); font-size: 19px; margin: 0; line-height: 32px; }
+.pista p { margin: 0; line-height: 32px; }
+.pista.falta { color: #8b93a6; }
+.pista .n { position: absolute; left: -40px; top: 0; width: 28px; text-align: center; font-family: var(--f-display); font-weight: 700; color: var(--margem); line-height: 32px; }
+
+/* chat do grupo */
+.chat { background: #e9e3d7; border-radius: 12px; overflow: hidden; border: 2px solid var(--tinta); }
+.chat-topo { background: #1f6f5c; color: #fff; padding: 10px 14px; display: flex; gap: 10px; align-items: center; }
+.chat-topo .av { width: 34px; height: 34px; border-radius: 50%; background: var(--sol); color: var(--tinta); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; }
+.chat-topo b { font-family: var(--f-display); display: block; line-height: 1.1; }
+.chat-topo small { opacity: .85; }
+.chat-corpo { padding: 14px; display: grid; gap: 10px; min-height: 120px; max-height: 42vh; overflow-y: auto; }
+.bolha { background: #fff; border-radius: 4px 12px 12px 12px; padding: 8px 12px; max-width: 88%; box-shadow: 0 1px 0 rgba(0,0,0,.12); justify-self: start; min-width: 0; }
+.bolha .autor { font-family: var(--f-display); font-weight: 600; font-size: 14px; }
+.bolha .txt { font-size: 17px; overflow-wrap: anywhere; }
+.bolha .meta { font-size: 12px; color: #8a8f99; text-align: right; }
+.etq { display: inline-block; font-size: 13px; font-weight: 700; border-radius: 6px; padding: 1px 8px; margin-top: 4px; color: #fff; }
+.etq.ajuda { background: var(--ok); }
+.etq.machuca { background: var(--nao); }
+.etq.certo { background: var(--tinta); }
+.chat-botoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; background: #fff; border-top: 2px solid var(--tinta); }
+.chat-botoes .btn { width: 100%; }
+
+/* linha do tempo */
+.colunas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 620px) { .colunas { grid-template-columns: 1fr; } }
+.cartoes { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.cartao { text-align: left; background: #fff3c9; border: 2px solid var(--tinta); border-radius: 8px; padding: 8px 12px; font-size: 15px; box-shadow: 0 3px 0 var(--tinta); transform: rotate(-.6deg); }
+.cartao:nth-child(even) { transform: rotate(.7deg); background: #d9ecff; }
+.trilha { border: 2px dashed var(--tinta-suave); border-radius: 10px; padding: 10px; display: grid; gap: 6px; align-content: start; min-height: 120px; background: rgba(255,255,255,.6); min-width: 0; }
+.trilha .item { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: start; font-size: 15px; }
+.trilha .item b { background: var(--tinta); color: #fff; border-radius: 50%; width: 26px; height: 26px; display: grid; place-items: center; font-family: var(--f-display); font-size: 14px; }
+.trilha .item.certo b { background: var(--ok); }
+.trilha .vazio { color: var(--tinta-suave); font-style: italic; }
+.rotulo { font-family: var(--f-display); font-weight: 600; font-size: 14px; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-suave); margin: 0 0 6px; }
+
+/* quiz */
+.opcoes { display: grid; gap: 10px; }
+.opcao { text-align: left; background: #fff; border: 2px solid var(--tinta); border-radius: 10px; padding: 12px 14px; font-size: 16px; box-shadow: 0 3px 0 var(--tinta); }
+.opcao.certa { background: #d8f2e3; border-color: var(--ok); }
+.opcao.errada { background: #fbe0e0; border-color: var(--nao); }
+.explica { border-left: 4px solid var(--sol); background: #fff8dd; padding: 8px 12px; border-radius: 0 8px 8px 0; margin-top: 12px; }
+.progresso { display: flex; gap: 6px; margin-bottom: 10px; }
+.progresso i { flex: 1; height: 8px; border-radius: 4px; background: #e2e5ec; }
+.progresso i.feito { background: var(--sol-escuro); }
+
+/* certificado */
+.certificado { text-align: center; border: 4px double var(--tinta); border-radius: 12px; padding: 18px 14px; background: #fff; margin: 6px 0 12px; }
+.certificado .t { font-family: var(--f-display); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-suave); }
+.certificado .nome { font-family: var(--f-display); font-weight: 700; font-size: 30px; border-bottom: 2px solid var(--tinta); display: inline-block; min-width: 60%; padding: 0 10px; margin: 6px 0; overflow-wrap: anywhere; }
+.certificado input { font: inherit; font-size: 16px; padding: 8px 10px; border: 2px solid var(--tinta); border-radius: 8px; width: min(320px, 100%); margin-top: 8px; }
+.ajuda-box { background: var(--quadro); color: var(--giz); border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+.ajuda-box b { color: var(--sol); font-family: var(--f-display); }
+@media (max-width: 520px) {
+  body { font-size: 16px; }
+  .folha { padding: 16px 14px 16px 44px; }
+  .folha::before { left: 30px; }
+  .pista .n { left: -36px; }
+  .dialogo .fala { font-size: 17px; }
+  .objetivo { max-width: 100%; }
+  .topo { flex-direction: column; }
+}
+@media (max-width: 520px) { .avisos { top: calc(env(safe-area-inset-top, 0px) + 132px); } }
+@media (prefers-reduced-motion: reduce) { .aviso { animation: none; } }
+</style>
+</head><body>
+
+<canvas id="jogo" aria-label="Mapa da escola"></canvas>
+
+<div class="topo">
+  <div class="objetivo" id="objetivo"><small>Próximo passo</small><span id="objetivoTexto">Comece a investigação</span></div>
+  <div class="acoes-topo">
+    <button class="btn-topo" id="btnCaderno" type="button">Caderno <span class="num" id="contPistas">0/7</span></button>
+    <button class="btn-topo" id="btnSom" type="button" aria-pressed="true">Som: ligado</button>
+    <button class="btn-topo" id="btnMenu" type="button">Menu</button>
+  </div>
+</div>
+
+<div class="avisos" id="avisos" aria-live="polite"></div>
+<button class="interagir" id="interagir" type="button" hidden><kbd>E</kbd><span id="interagirTexto">Conversar</span></button>
+<div class="joy" id="joy" hidden><i id="joyBola"></i></div>
+<div class="dica-toque" id="dicaToque" hidden>Arraste o dedo na tela para andar</div>
+
+<div class="dialogo" id="dialogo" hidden role="dialog" aria-live="polite">
+  <div class="quem" id="dlgQuem"></div>
+  <div class="fala" id="dlgFala"></div>
+  <div class="escolhas" id="dlgEscolhas"></div>
+  <div class="seguir"><button class="btn-giz" id="dlgSeguir" type="button">Continuar ▸</button></div>
+</div>
+
+<div id="modais"></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ===================================================================
+   HISTÓRIA (mesmo conteúdo do CaseData do Roblox)
+   =================================================================== */
+const HIST = {
+  intro: [
+    "Na semana passada, uma montagem com a foto da Ana, aluna do 8º ano B, circulou no grupo da turma.",
+    "Ela ficou tão constrangida que parou de vir à escola.",
+    "Você faz parte da equipe Escola Conectada Sem Bullying. Sua missão é descobrir o que aconteceu, entender como a imagem se espalhou e ajudar a resolver o caso com respeito."
+  ],
+  obrigatorias: ["RelatoAna","PrintGrupo","BilheteAmassado","RegistroLab","Encaminhamentos","ArrependimentoLucas","LinhaDoTempo"],
+  pistas: {
+    RelatoAna: { nome: "Relato da Ana", desc: "Ana escorregou na quadra durante a aula de Educação Física. Alguém tirou uma foto e fez uma montagem com a frase 'A QUEDA DO ANO', que foi postada no grupo da turma." },
+    PrintGrupo: { nome: "Print do grupo '8º B Oficial'", desc: "A montagem foi publicada primeiro por um perfil anônimo chamado 'zoeira_8B', na terça-feira às 10h25." },
+    BilheteAmassado: { nome: "Rascunho amassado", desc: "Papel encontrado na lixeira do laboratório: 'A QUEDA DO ANO - perfil zoeira_8B'. No canto, as iniciais L.M.",
+      requer: ["PrintGrupo"], bloqueado: "Um papel amassado na lixeira. Você ainda não sabe se isso é importante. Converse com mais pessoas primeiro." },
+    RegistroLab: { nome: "Registro do laboratório", desc: "Folha de uso dos computadores: Lucas M. usou o computador 07 na terça, das 10h10 às 10h40. A montagem foi postada às 10h25.",
+      requer: ["PrintGrupo"], bloqueado: "Uma folha com nomes e horários. Sem saber quando a montagem foi postada, ela não diz muita coisa." },
+    Encaminhamentos: { nome: "Análise das mensagens", desc: "Rafa encaminhou a montagem para outros 5 grupos. Muitos riram, mas quatro colegas pediram para parar e a Bia guardou as provas para avisar um adulto." },
+    ArrependimentoLucas: { nome: "Conversa com o Lucas", desc: "Lucas admitiu ter criado a montagem e o perfil 'zoeira_8B'. Ao perceber o sofrimento da Ana, decidiu apagar o conteúdo e pedir desculpas." },
+    LinhaDoTempo: { nome: "Linha do tempo do caso", desc: "Queda na quadra → foto → montagem no laboratório → postagem pelo perfil anônimo → compartilhamento em massa → Ana deixa de ir à escola → Bia leva o print à coordenação." }
+  },
+  npcs: {
+    Ana: { nome: "Ana", papel: "Aluna do 8º B", dialogos: [
+      { requer: ["RelatoAna","ArrependimentoLucas"], falas: ["O Lucas veio falar comigo e pediu desculpas. Ainda dói um pouco, mas me senti melhor.", "Obrigada por não desistir de mim."] },
+      { requer: ["RelatoAna"], falas: ["Obrigada por me ouvir. Ainda tenho vergonha de voltar pra sala...", "A Bia, minha amiga, viu tudo no grupo. Talvez ela possa te ajudar. Ela fica no pátio."] },
+      { requer: [], concede: "RelatoAna", falas: ["...", "(Ana olha para o chão e parece não querer conversar.)"], escolhas: [
+        { texto: "Ei, você é a menina da foto, né? Kkkk", correta: false, resposta: ["(Ana se vira e vai embora, com os olhos cheios de lágrimas.)", "Pense: como você se sentiria se falassem assim com você? Tente de novo, com mais empatia."] },
+        { texto: "Oi, Ana. Você não precisa falar se não quiser, mas estou aqui para ajudar. Posso sentar com você?", correta: true, resposta: ["...Tá bom.", "Na aula de Educação Física eu escorreguei na quadra. Alguém tirou uma foto bem na hora.", "Depois fizeram uma montagem com a frase 'A QUEDA DO ANO' e colocaram no grupo da turma.", "Todo mundo ficou rindo, mandando figurinha... Eu não tive coragem de voltar."] },
+        { texto: "Isso é bobagem, esquece e volta pra aula.", correta: false, resposta: ["Não é bobagem pra mim...", "(Diminuir o sofrimento de alguém faz a pessoa se sentir ainda mais sozinha. Tente de novo.)"] }
+      ] }
+    ] },
+    Bia: { nome: "Bia", papel: "Amiga da Ana", dialogos: [
+      { requer: ["PrintGrupo"], falas: ["Já te mostrei o print. Por favor, descobre quem fez isso!", "Ah, a Dona Célia, a inspetora, comentou que achou umas coisas estranhas no laboratório de informática."] },
+      { requer: ["RelatoAna"], concede: "PrintGrupo", falas: ["A Ana te contou? Que bom que ela confiou em você.", "Eu tirei um print do grupo antes que apagassem. Guardei pra mostrar a um adulto.", "Olha aqui: quem postou primeiro foi um perfil chamado 'zoeira_8B', sem foto. Ninguém sabe quem é.", "Guardar as provas e contar para um adulto de confiança é o certo a fazer."] },
+      { requer: [], falas: ["Desculpa, agora não dá. Tô preocupada com a minha amiga Ana.", "Se você quer mesmo ajudar, fala com ela primeiro... mas com cuidado. Ela está sozinha perto do muro."] }
+    ] },
+    DonaCelia: { nome: "Dona Célia", papel: "Inspetora", dialogos: [
+      { requer: ["PrintGrupo"], falas: ["Então era isso que estava acontecendo! Na terça eu vi um papel amassado na lixeira do laboratório de informática.", "Deixei lá mesmo. E tem a folha de registro de quem usa os computadores, fica em cima da mesa do professor, no laboratório."] },
+      { requer: [], falas: ["Bom dia! Os corredores andam agitados essa semana... muita gente cochichando e olhando o celular.", "Se descobrir alguma coisa, me conta."] }
+    ] },
+    ProfMarcos: { nome: "Prof. Marcos", papel: "Professor", dialogos: [
+      { requer: ["Encaminhamentos"], falas: ["Você descobriu como a imagem se espalhou. Muito bem.", "Agora monte a linha do tempo no quadro de investigação da coordenação para entender a ordem dos fatos."] },
+      { requer: ["PrintGrupo"], falas: ["O que fizeram com a Ana tem nome: cyberbullying.", "Desde 2015 existe a Lei 13.185, que criou o Programa de Combate à Intimidação Sistemática. Em 2024, a Lei 14.811 incluiu a intimidação sistemática, inclusive a virtual, no Código Penal.", "Mas o mais importante agora é acolher a Ana e fazer os envolvidos entenderem o impacto do que fizeram.", "A Bia entregou à coordenação uma cópia das mensagens do grupo. Ela está no computador da coordenação. Dê uma olhada."] },
+      { requer: [], falas: ["Olá! Hoje a aula é sobre cidadania digital.", "Você sabia que tudo o que postamos pode ser copiado e compartilhado em segundos? Por isso é preciso pensar antes de postar."] }
+    ] },
+    Lucas: { nome: "Lucas", papel: "Aluno do 8º B", dialogos: [
+      { requer: ["ArrependimentoLucas"], falas: ["Já apaguei a montagem e o perfil. Vou pedir desculpas pra Ana na frente da turma também, se ela quiser.", "Eu não fazia ideia de que ia machucar tanto."] },
+      { requer: ["BilheteAmassado","RegistroLab"], concede: "ArrependimentoLucas", falas: ["(Lucas fica em silêncio ao ver o rascunho e a folha do laboratório.)", "Tá... fui eu. Mas era só uma brincadeira! Todo mundo riu..."], escolhas: [
+        { texto: "Você vai ser expulso! Vou contar pra escola inteira o que você fez!", correta: false, resposta: ["(Lucas fica na defensiva e sai irritado.)", "Expor ou humilhar quem errou só repete a violência. Tente uma abordagem que ajude a resolver."] },
+        { texto: "Brincadeira só é brincadeira quando todo mundo se diverte. A Ana parou de vir à escola. Como você acha que ela se sente?", correta: true, resposta: ["...Eu não tinha pensado nisso.", "Achei que ia ser engraçado. Mas aí o Rafa espalhou pra todos os grupos e saiu do controle.", "Eu quero consertar. Vou apagar tudo e pedir desculpas pra ela."] }
+      ] },
+      { requer: [], falas: ["Que foi? Não sei de nada dessa foto aí.", "(Lucas parece nervoso e evita olhar para você.)"] }
+    ] },
+    Rafa: { nome: "Rafa", papel: "Aluno do 8º B", dialogos: [
+      { requer: ["Encaminhamentos"], falas: ["Tá, eu repassei pros outros grupos. Mas não fui eu que fiz!", "...Pensando bem, se eu não tivesse compartilhado, não teria chegado em tanta gente. Foi mal.", "Quem compartilha também participa, né?"] },
+      { requer: [], falas: ["E aí! Você viu o meme que tava rodando? Hahaha.", "Ah, apagaram, né? Que pena."] }
+    ] },
+    CoordHelena: { nome: "Coord. Helena", papel: "Coordenadora", dialogos: [
+      { requer: "TODAS", abreFinal: true, falas: ["Você reuniu todas as pistas. Vamos para a reunião de encerramento do caso.", "Responda com atenção: precisamos entender o que aconteceu e decidir a melhor forma de resolver."] },
+      { requer: ["PrintGrupo"], falas: ["A Bia trouxe o print para mim. Foi muito corajosa.", "Quando tiver todas as pistas, volte aqui para fecharmos o caso."] },
+      { requer: [], falas: ["Olá, sou a coordenadora Helena. Estamos preocupados com a Ana.", "Converse com os alunos e funcionários. Quando tiver reunido as pistas, venha falar comigo."] }
+    ] }
+  },
+  minis: {
+    AnaliseGrupo: { tipo: "classificar", titulo: "Mensagens do grupo '8º B Oficial'", acao: "Analisar mensagens",
+      instrucao: "Leia cada mensagem e decida: ela ajuda (respeitosa) ou machuca (ofensiva)?",
+      requer: ["PrintGrupo"], bloqueado: "Este computador guarda a cópia das mensagens do grupo entregue à coordenação. Converse com mais pessoas antes de analisar.",
+      concede: "Encaminhamentos", minimo: 7,
+      itens: [
+        { autor: "Rafa", hora: "10:26", texto: "KKKKKKK a queda do ano 😂😂", ofensiva: true },
+        { autor: "Júlia", hora: "10:27", texto: "Gente, isso não tem graça. Apaguem essa foto.", ofensiva: false },
+        { autor: "Rafa", hora: "10:29", texto: "Encaminhei pros outros grupos kkk", ofensiva: true },
+        { autor: "Bia", hora: "10:31", texto: "Ana, se precisar conversar, tô aqui.", ofensiva: false },
+        { autor: "Caio", hora: "10:33", texto: "Ela mereceu, quem mandou ser desastrada", ofensiva: true },
+        { autor: "Bia", hora: "10:35", texto: "Vou mostrar isso pra coordenação. Não é legal expor ninguém.", ofensiva: false },
+        { autor: "Caio", hora: "10:36", texto: "Façam mais figurinha dela 🤣", ofensiva: true },
+        { autor: "Júlia", hora: "10:40", texto: "Parem, imagina se fosse com vocês.", ofensiva: false }
+      ] },
+    LinhaDoTempo: { tipo: "ordenar", titulo: "Quadro de investigação", acao: "Montar linha do tempo",
+      instrucao: "Toque nos acontecimentos na ordem em que eles aconteceram.",
+      requer: ["PrintGrupo","RegistroLab","Encaminhamentos"], bloqueado: "O quadro está vazio. Você precisa do print, do registro do laboratório e da análise das mensagens antes de montar a linha do tempo.",
+      concede: "LinhaDoTempo",
+      eventos: [
+        { id: "queda", texto: "Ana escorrega na quadra e alguém tira uma foto" },
+        { id: "montagem", texto: "Lucas cria a montagem no computador 07 do laboratório" },
+        { id: "postagem", texto: "O perfil 'zoeira_8B' posta a montagem no grupo da turma" },
+        { id: "espalha", texto: "Rafa encaminha a imagem para outros grupos" },
+        { id: "ana", texto: "Ana fica constrangida e deixa de ir à escola" },
+        { id: "denuncia", texto: "Bia guarda o print e leva à coordenação" }
+      ] }
+  },
+  final: {
+    perguntas: [
+      { pergunta: "Quem criou a montagem e o perfil 'zoeira_8B'?", opcoes: ["Rafa","Lucas","Bia","Não é possível saber"], correta: 1, explicacao: "O rascunho com as iniciais L.M. e o registro do laboratório apontam para o Lucas, que confirmou." },
+      { pergunta: "Qual foi o papel de quem compartilhou a imagem?", opcoes: ["Nenhum, só quem criou é responsável","Ampliou a humilhação, levando a imagem a muito mais pessoas","Ajudou a Ana a ficar conhecida"], correta: 1, explicacao: "Quem compartilha também participa do cyberbullying e aumenta o dano." },
+      { pergunta: "O que a Bia fez de certo?", opcoes: ["Respondeu xingando todo mundo no grupo","Guardou as provas e contou a um adulto de confiança","Fingiu que não viu nada"], correta: 1, explicacao: "Guardar provas e procurar um adulto de confiança é a atitude mais segura e eficaz." },
+      { pergunta: "Qual a melhor forma de resolver o caso?", opcoes: ["Expor o Lucas no grupo para ele sentir o mesmo","Ignorar, porque logo todo mundo esquece","Acolher a Ana, remover o conteúdo, conversar com os envolvidos e as famílias e fazer ações de conscientização na turma"], correta: 2, explicacao: "Responder com mais exposição ou com silêncio não resolve. O caminho é acolher, reparar o dano e educar." }
+    ],
+    vitoria: [
+      "A montagem foi apagada, o Lucas pediu desculpas e a turma participou de uma roda de conversa sobre respeito na internet.",
+      "A Ana voltou para a escola, acompanhada da Bia e com o apoio da coordenação.",
+      "Lembre-se: se você sofrer ou presenciar cyberbullying, não compartilhe, guarde as provas e procure um adulto de confiança."
+    ]
+  }
+};
+
+/* ===================================================================
+   ESTADO
+   =================================================================== */
+const CHAVE = "casoFotoNoGrupo_v1";
+const estado = { pistas: new Set(), concluido: false };
+function salvar() {
+  try { localStorage.setItem(CHAVE, JSON.stringify({ pistas: [...estado.pistas], concluido: estado.concluido })); } catch (e) {}
+}
+function carregarSalvo() {
+  try { const d = JSON.parse(localStorage.getItem(CHAVE) || "null"); return d && Array.isArray(d.pistas) ? d : null; } catch (e) { return null; }
+}
+const tem = id => estado.pistas.has(id);
+const temTodas = lista => lista === "TODAS" ? HIST.obrigatorias.every(tem) : (lista || []).every(tem);
+
+/* ===================================================================
+   MAPA DA ESCOLA (coordenadas do mundo, em pixels)
+   =================================================================== */
+const MUNDO = { w: 1600, h: 1100 };
+const T = 16;               // espessura das paredes
+const solidos = [];          // retângulos que bloqueiam o caminho
+const paredes = [];          // para desenhar
+const moveis = [];           // móveis desenhados no chão
+const altos = [];            // árvores (desenhadas por cima)
+const pisos = [];
+const placas = [];
+
+function solido(x, y, w, h) { solidos.push({ x, y, w, h }); }
+function parede(x, y, w, h, tipo) { paredes.push({ x, y, w, h, tipo: tipo || "sala" }); solido(x, y, w, h); }
+function movel(x, y, w, h, cor, opts) { const m = Object.assign({ x, y, w, h, cor }, opts || {}); moveis.push(m); if (m.solido !== false) solido(x, y, w, h); return m; }
+
+const SALAS = {
+  sala7A: { x: 80, y: 60, w: 400, h: 300, porta: "S", nome: "Sala 7º A", piso: "madeira" },
+  sala8B: { x: 560, y: 60, w: 400, h: 300, porta: "S", nome: "Sala 8º B", piso: "madeira" },
+  lab:    { x: 1040, y: 60, w: 400, h: 300, porta: "S", nome: "Laboratório de Informática", piso: "azulejo" },
+  coord:  { x: 60, y: 480, w: 360, h: 320, porta: "L", nome: "Coordenação", piso: "taco" }
+};
+
+function sala(r) {
+  const vao = 92;
+  pisos.push({ x: r.x, y: r.y, w: r.w, h: r.h, tipo: r.piso });
+  parede(r.x, r.y, r.w, T, "janela");
+  parede(r.x, r.y, T, r.h);
+  if (r.porta === "S") {
+    const cx = r.x + r.w / 2;
+    parede(r.x, r.y + r.h - T, cx - vao / 2 - r.x, T);
+    parede(cx + vao / 2, r.y + r.h - T, r.x + r.w - (cx + vao / 2), T);
+    parede(r.x + r.w - T, r.y, T, r.h);
+    placas.push({ x: cx, y: r.y + r.h + 14, texto: r.nome });
+  } else {
+    const cy = r.y + r.h / 2;
+    parede(r.x, r.y + r.h - T, r.w, T);
+    parede(r.x + r.w - T, r.y, T, cy - vao / 2 - r.y);
+    parede(r.x + r.w - T, cy + vao / 2, T, r.y + r.h - (cy + vao / 2));
+    placas.push({ x: r.x + r.w + 62, y: cy - 58, texto: r.nome });
+  }
+}
+
+function montarEscola() {
+  // muro com portão
+  parede(20, 20, MUNDO.w - 40, 18, "muro");
+  parede(20, 20, 18, MUNDO.h - 40, "muro");
+  parede(MUNDO.w - 38, 20, 18, MUNDO.h - 40, "muro");
+  parede(20, MUNDO.h - 38, 730, 18, "muro");
+  parede(850, MUNDO.h - 38, MUNDO.w - 870, 18, "muro");
+  // limites do mundo
+  solido(-50, -50, MUNDO.w + 100, 50); solido(-50, MUNDO.h, MUNDO.w + 100, 50);
+  solido(-50, 0, 50, MUNDO.h); solido(MUNDO.w, 0, 50, MUNDO.h);
+
+  // quadra
+  pisos.push({ x: 1110, y: 470, w: 400, h: 520, tipo: "quadraMargem" });
+  pisos.push({ x: 1130, y: 490, w: 360, h: 480, tipo: "quadra" });
+  // canto da Ana (grama)
+  pisos.push({ x: 38, y: 850, w: 380, h: 212, tipo: "grama" });
+
+  Object.values(SALAS).forEach(sala);
+
+  // salas de aula: quadro, mesa do professor e carteiras
+  [SALAS.sala7A, SALAS.sala8B].forEach((r, i) => {
+    movel(r.x + 110, r.y + T, 180, 10, "#2b5a48", { tipo: "quadro", texto: i ? "Tema: Cyberbullying" : "Cidadania Digital" , solido: true });
+    movel(r.x + 300, r.y + 60, 70, 34, "#8a5a33", { tipo: "mesa" });
+    for (let c = 0; c < 4; c++) for (let l = 0; l < 3; l++) {
+      movel(r.x + 50 + c * 88, r.y + 125 + l * 58, 44, 24, "#d2a46b", { tipo: "carteira" });
+    }
+  });
+
+  // laboratório: duas bancadas com 6 computadores cada
+  const L = SALAS.lab;
+  let pc = 1;
+  [L.y + 30, L.y + 140].forEach(by => {
+    movel(L.x + 40, by, 320, 28, "#f2f4f7", { tipo: "bancada" });
+    for (let k = 0; k < 6; k++) moveis.push({ x: L.x + 50 + k * 53, y: by + 3, w: 30, h: 14, tipo: "pc", n: pc++ });
+  });
+  movel(L.x + 270, L.y + 225, 90, 36, "#8a5a33", { tipo: "mesa" });            // mesa do professor
+  movel(L.x + 30, L.y + 240, 30, 30, "#7d8590", { tipo: "lixeira" });           // lixeira
+
+  // coordenação
+  const C = SALAS.coord;
+  movel(C.x + 110, C.y + 120, 110, 40, "#8a5a33", { tipo: "mesa" });
+  movel(C.x + 240, C.y + T + 2, 90, 26, "#7a4f2c", { tipo: "armario" });
+  movel(C.x + T, C.y + 160, 10, 110, "#c9935a", { tipo: "cortica", solido: true });
+  movel(C.x + 240, C.y + 268, 90, 30, "#8a5a33", { tipo: "mesa" });
+  movel(C.x + 300, C.y + 70, 30, 30, "#3f7d3a", { tipo: "planta" });
+
+  // marquise na frente das salas
+  pisos.push({ x: 80, y: 360, w: 1360, h: 56, tipo: "marquise" });
+  for (let x = 120; x <= 1400; x += 160) movel(x, 408, 10, 10, "#e9e6dc", { tipo: "pilar" });
+
+  // pátio coberto
+  pisos.push({ x: 600, y: 540, w: 300, h: 190, tipo: "cobertura" });
+  [[600,540],[890,540],[600,720],[890,720]].forEach(([x,y]) => movel(x, y, 10, 10, "#e9e6dc", { tipo: "pilar" }));
+  movel(630, 590, 90, 18, "#9c6b3f", { tipo: "banco" });
+  movel(780, 590, 90, 18, "#9c6b3f", { tipo: "banco" });
+  movel(630, 670, 90, 18, "#9c6b3f", { tipo: "banco" });
+  movel(780, 670, 90, 18, "#9c6b3f", { tipo: "banco" });
+
+  // mural, mapa, bebedouro, lixeiras de reciclagem, mastro
+  movel(470, 930, 150, 14, "#f08a3c", { tipo: "mural" });
+  movel(900, 960, 110, 12, "#ffffff", { tipo: "mapa" });
+  movel(490, 440, 26, 18, "#c7ccd3", { tipo: "bebedouro" });
+  ["#2f6fd1","#d24a4a","#f2c230","#2f9e62"].forEach((c, i) => movel(940 + i * 24, 770, 20, 20, c, { tipo: "reciclagem" }));
+  movel(1040, 900, 10, 10, "#9aa0a8", { tipo: "mastro" });
+
+  // canto isolado
+  movel(170, 1018, 110, 18, "#9c6b3f", { tipo: "banco" });
+
+  // quadra: alambrado com entrada pelo lado do pátio
+  const fx0 = 1100, fx1 = 1520, fy0 = 460, fy1 = 1000;
+  moveis.push({ tipo: "alambrado", x: fx0, y: fy0, w: fx1 - fx0, h: fy1 - fy0 });
+  solido(fx0, fy0, fx1 - fx0, 4); solido(fx0, fy1, fx1 - fx0, 4); solido(fx1, fy0, 4, fy1 - fy0);
+  solido(fx0, fy0, 4, 220); solido(fx0, fy0 + 320, 4, fy1 - fy0 - 320);
+  movel(1530, 500, 22, 460, "#c4c7cc", { tipo: "arquibancada" });
+  placas.push({ x: 1060, y: 735, texto: "Quadra" });
+
+  // árvores
+  [[500, 820], [1050, 820], [110, 920], [1000, 470], [300, 450]].forEach(([x, y]) => { altos.push({ x, y, tipo: "arvore" }); solido(x - 7, y - 7, 14, 14); });
+}
+montarEscola();
+
+/* ===================================================================
+   PERSONAGENS
+   =================================================================== */
+const PELE = { clara: "#ffdbac", media: "#f1c27d", morena: "#e0ac69", parda: "#c68642", negra: "#8d5524" };
+const NPCS = [
+  { id: "Ana", x: 225, y: 1010, pele: PELE.morena, camisa: "#f7f7f7", calca: "#28335c", cabelo: "longo", corCabelo: "#4a2a16", mochila: "#c8508c", triste: true, olhar: "esq" },
+  { id: "Bia", x: 560, y: 650, pele: PELE.negra, camisa: "#f7f7f7", calca: "#28335c", cabelo: "coque", corCabelo: "#1b1414", oculos: true, mochila: "#4fae7a", olhar: "baixo" },
+  { id: "Lucas", x: 905, y: 336, pele: PELE.media, camisa: "#f7f7f7", calca: "#28335c", cabelo: "espetado", corCabelo: "#d1a043", mochila: "#c8473a", olhar: "cima" },
+  { id: "ProfMarcos", x: 640, y: 112, pele: PELE.clara, camisa: "#9ec2e6", calca: "#4a4a55", cabelo: "curto", corCabelo: "#8d8d8d", oculos: true, gravata: "#7a1f2a", adulto: true, olhar: "baixo" },
+  { id: "DonaCelia", x: 1175, y: 395, pele: PELE.parda, camisa: "#5f9a5f", calca: "#33333d", cabelo: "coque", corCabelo: "#d6d6d6", cracha: true, adulto: true, olhar: "baixo" },
+  { id: "Rafa", x: 1300, y: 720, pele: PELE.parda, camisa: "#f9cd2a", calca: "#2f5fd0", cabelo: "curto", corCabelo: "#231b14", olhar: "esq", bola: true },
+  { id: "CoordHelena", x: 225, y: 585, pele: PELE.morena, camisa: "#3f416b", calca: "#2e2e38", cabelo: "rabo", corCabelo: "#5a3018", cracha: true, adulto: true, olhar: "baixo" }
+];
+NPCS.forEach(n => solido(n.x - 9, n.y - 8, 18, 10));
+
+const OBJETOS = [
+  { id: "BilheteAmassado", tipo: "pista", x: SALAS.lab.x + 45, y: SALAS.lab.y + 270, rotulo: "Examinar a lixeira" },
+  { id: "RegistroLab", tipo: "pista", x: SALAS.lab.x + 315, y: SALAS.lab.y + 278, rotulo: "Examinar a folha" },
+  { id: "AnaliseGrupo", tipo: "mini", x: SALAS.coord.x + 285, y: SALAS.coord.y + 265, anel: 12, rotulo: "Analisar mensagens" },
+  { id: "LinhaDoTempo", tipo: "mini", x: SALAS.coord.x + 52, y: SALAS.coord.y + 215, rotulo: "Montar linha do tempo" }
+];
+
+const jogador = { x: 800, y: 1040, dir: "cima", andando: false, passo: 0 };
+
+/* ===================================================================
+   CANVAS E CÂMERA
+   =================================================================== */
+const cv = document.getElementById("jogo");
+const ctx = cv.getContext("2d");
+let dpr = 1, larg = 0, alt = 0, zoom = 1;
+function redimensionar() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  larg = window.innerWidth; alt = window.innerHeight;
+  cv.width = Math.round(larg * dpr); cv.height = Math.round(alt * dpr);
+  zoom = Math.max(0.72, Math.min(1.3, Math.min(larg / 900, alt / 620)));
+}
+window.addEventListener("resize", redimensionar);
+redimensionar();
+
+/* ===================================================================
+   DESENHO
+   =================================================================== */
+const FONTE = '"Fredoka", "Trebuchet MS", sans-serif';
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+
+function desenharPisos() {
+  // grama fora do muro
+  ctx.fillStyle = "#6fa552"; ctx.fillRect(-400, -400, MUNDO.w + 800, MUNDO.h + 800);
+  // pátio (concreto em placas)
+  ctx.fillStyle = "#dcd6c8"; ctx.fillRect(38, 38, MUNDO.w - 76, MUNDO.h - 76);
+  ctx.strokeStyle = "#cfc8b8"; ctx.lineWidth = 1;
+  for (let x = 40; x < MUNDO.w - 38; x += 48) { ctx.beginPath(); ctx.moveTo(x, 38); ctx.lineTo(x, MUNDO.h - 38); ctx.stroke(); }
+  for (let y = 40; y < MUNDO.h - 38; y += 48) { ctx.beginPath(); ctx.moveTo(38, y); ctx.lineTo(MUNDO.w - 38, y); ctx.stroke(); }
+  // caminho do portão
+  ctx.fillStyle = "#c9c2b1"; ctx.fillRect(760, 760, 80, 320);
+
+  for (const p of pisos) {
+    if (p.tipo === "madeira" || p.tipo === "taco") {
+      ctx.fillStyle = p.tipo === "madeira" ? "#c99a63" : "#b07e4f"; ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = "rgba(90,55,25,.22)";
+      for (let y = p.y; y < p.y + p.h; y += 18) { ctx.beginPath(); ctx.moveTo(p.x, y); ctx.lineTo(p.x + p.w, y); ctx.stroke(); }
+    } else if (p.tipo === "azulejo") {
+      ctx.fillStyle = "#e9edf2"; ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = "#d3d9e1";
+      for (let x = p.x; x < p.x + p.w; x += 30) { ctx.beginPath(); ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); ctx.stroke(); }
+      for (let y = p.y; y < p.y + p.h; y += 30) { ctx.beginPath(); ctx.moveTo(p.x, y); ctx.lineTo(p.x + p.w, y); ctx.stroke(); }
+    } else if (p.tipo === "quadraMargem") {
+      ctx.fillStyle = "#c0674a"; ctx.fillRect(p.x, p.y, p.w, p.h);
+    } else if (p.tipo === "quadra") {
+      ctx.fillStyle = "#3f8f6b"; ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = "#f4f4f4"; ctx.lineWidth = 3;
+      ctx.strokeRect(p.x + 4, p.y + 4, p.w - 8, p.h - 8);
+      ctx.beginPath(); ctx.moveTo(p.x + 4, p.y + p.h / 2); ctx.lineTo(p.x + p.w - 4, p.y + p.h / 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x + p.w / 2, p.y + p.h / 2, 46, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeRect(p.x + p.w / 2 - 70, p.y + 4, 140, 60);
+      ctx.strokeRect(p.x + p.w / 2 - 70, p.y + p.h - 64, 140, 60);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(p.x + p.w / 2 - 45, p.y - 2, 90, 6); ctx.fillRect(p.x + p.w / 2 - 45, p.y + p.h - 4, 90, 6);
+      ctx.lineWidth = 1;
+    } else if (p.tipo === "grama") {
+      ctx.fillStyle = "#86b765"; rr(p.x, p.y, p.w, p.h, 6); ctx.fill();
+      ctx.fillStyle = "rgba(60,110,50,.35)";
+      for (let i = 0; i < 60; i++) { const gx = p.x + (i * 67) % p.w, gy = p.y + (i * 41) % p.h; ctx.fillRect(gx, gy, 2, 6); }
+    } else if (p.tipo === "marquise") {
+      ctx.fillStyle = "rgba(40,40,60,.10)"; ctx.fillRect(p.x, p.y, p.w, p.h);
+    } else if (p.tipo === "cobertura") {
+      ctx.fillStyle = "rgba(40,40,60,.10)"; ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = "rgba(40,40,60,.18)"; ctx.setLineDash([6, 6]); ctx.strokeRect(p.x, p.y, p.w, p.h); ctx.setLineDash([]);
+    }
+  }
+}
+
+function desenharMoveis(t) {
+  for (const m of moveis) {
+    switch (m.tipo) {
+      case "carteira":
+        ctx.fillStyle = "rgba(0,0,0,.12)"; ctx.fillRect(m.x + 2, m.y + 3, m.w, m.h);
+        ctx.fillStyle = m.cor; rr(m.x, m.y, m.w, m.h, 3); ctx.fill();
+        ctx.fillStyle = "#2f63b5"; rr(m.x + m.w / 2 - 10, m.y + m.h + 4, 20, 14, 3); ctx.fill(); // cadeira
+        break;
+      case "mesa": case "armario": case "bancada": case "banco":
+        ctx.fillStyle = "rgba(0,0,0,.14)"; ctx.fillRect(m.x + 3, m.y + 4, m.w, m.h);
+        ctx.fillStyle = m.cor; rr(m.x, m.y, m.w, m.h, 3); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(m.x + 2, m.y + 2, m.w - 4, 4);
+        if (m.tipo === "armario") { ctx.strokeStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.moveTo(m.x + m.w / 2, m.y + 3); ctx.lineTo(m.x + m.w / 2, m.y + m.h - 3); ctx.stroke(); }
+        if (m.tipo === "bancada") { ctx.strokeStyle = "#b7bfca"; ctx.strokeRect(m.x, m.y, m.w, m.h); }
+        break;
+      case "quadro":
+        ctx.fillStyle = "#7a5a33"; ctx.fillRect(m.x - 4, m.y - 2, m.w + 8, m.h + 4);
+        ctx.fillStyle = m.cor; ctx.fillRect(m.x, m.y, m.w, m.h);
+        ctx.fillStyle = "#3a3a3a"; ctx.font = `600 13px ${FONTE}`; ctx.textAlign = "center";
+        ctx.fillText(m.texto, m.x + m.w / 2, m.y + m.h + 16);
+        break;
+      case "pc":
+        ctx.fillStyle = "#20283a"; rr(m.x, m.y, m.w, m.h, 2); ctx.fill();
+        ctx.fillStyle = m.n === 7 ? "#7fd1ff" : "#4f7fb8"; ctx.fillRect(m.x + 2, m.y + 2, m.w - 4, m.h - 4);
+        ctx.fillStyle = "#20283a"; ctx.font = `600 9px ${FONTE}`; ctx.textAlign = "center";
+        ctx.fillText(String(m.n).padStart(2, "0"), m.x + m.w / 2, m.y + m.h + 10);
+        ctx.fillStyle = "#4a4a55"; rr(m.x + m.w / 2 - 8, m.y + m.h + 14, 16, 12, 3); ctx.fill();
+        break;
+      case "lixeira":
+        ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.beginPath(); ctx.ellipse(m.x + 16, m.y + 18, 16, 14, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = m.cor; ctx.beginPath(); ctx.arc(m.x + 15, m.y + 15, 15, 0, 7); ctx.fill();
+        ctx.fillStyle = "#59606a"; ctx.beginPath(); ctx.arc(m.x + 15, m.y + 15, 10, 0, 7); ctx.fill();
+        break;
+      case "cortica":
+        ctx.fillStyle = "#7a5a33"; ctx.fillRect(m.x - 2, m.y - 4, m.w + 4, m.h + 8);
+        ctx.fillStyle = m.cor; ctx.fillRect(m.x, m.y, m.w, m.h);
+        break;
+      case "planta":
+        ctx.fillStyle = "#b5653a"; ctx.beginPath(); ctx.arc(m.x + 15, m.y + 15, 11, 0, 7); ctx.fill();
+        ctx.fillStyle = m.cor; ctx.beginPath(); ctx.arc(m.x + 15, m.y + 12, 13, 0, 7); ctx.fill();
+        break;
+      case "pilar": case "mastro":
+        ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.fillRect(m.x + 2, m.y + 3, m.w, m.h);
+        ctx.fillStyle = m.cor; ctx.fillRect(m.x, m.y, m.w, m.h);
+        if (m.tipo === "mastro") { ctx.fillStyle = "#2f9e62"; ctx.fillRect(m.x + 10, m.y - 30, 28, 18); }
+        break;
+      case "mural":
+        ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.fillRect(m.x + 3, m.y + 4, m.w, m.h);
+        ctx.fillStyle = m.cor; rr(m.x, m.y, m.w, m.h, 3); ctx.fill();
+        rotulo("RESPEITO TAMBÉM É ONLINE", m.x + m.w / 2, m.y - 8, "#f08a3c", "#fff");
+        break;
+      case "mapa":
+        ctx.fillStyle = "#fff"; rr(m.x, m.y, m.w, m.h, 3); ctx.fill(); ctx.strokeStyle = "#1f2a44"; ctx.stroke();
+        rotulo("← Coordenação · Salas ↑ · Quadra →", m.x + m.w / 2, m.y - 8, "#fff", "#1f2a44");
+        break;
+      case "bebedouro": case "reciclagem":
+        ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.fillRect(m.x + 2, m.y + 3, m.w, m.h);
+        ctx.fillStyle = m.cor; rr(m.x, m.y, m.w, m.h, 4); ctx.fill();
+        break;
+      case "arquibancada":
+        for (let i = 0; i < 3; i++) { ctx.fillStyle = ["#d4d7dc","#c4c7cc","#b3b7bd"][i]; ctx.fillRect(m.x + i * 7, m.y, 8, m.h); }
+        break;
+      case "alambrado":
+        ctx.strokeStyle = "rgba(90,95,105,.75)"; ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(m.x, m.y + 220); ctx.lineTo(m.x, m.y); ctx.lineTo(m.x + m.w, m.y); ctx.lineTo(m.x + m.w, m.y + m.h); ctx.lineTo(m.x, m.y + m.h); ctx.lineTo(m.x, m.y + 320);
+        ctx.stroke(); ctx.lineWidth = 1;
+        break;
+    }
+  }
+}
+
+function desenharParedes() {
+  for (const p of paredes) {
+    if (p.tipo === "muro") {
+      ctx.fillStyle = "#b9553c"; ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = "rgba(255,230,210,.35)";
+      const horiz = p.w > p.h;
+      for (let i = 0; horiz ? i < p.w : i < p.h; i += 22) {
+        ctx.beginPath();
+        if (horiz) { ctx.moveTo(p.x + i, p.y); ctx.lineTo(p.x + i, p.y + p.h); } else { ctx.moveTo(p.x, p.y + i); ctx.lineTo(p.x + p.w, p.y + i); }
+        ctx.stroke();
+      }
+    } else {
+      ctx.fillStyle = "#f1dfae"; ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = "#d5bf86"; ctx.fillRect(p.x, p.y + p.h - 4, p.w, 4);
+      if (p.tipo === "janela") {
+        ctx.fillStyle = "#a9d4ef";
+        for (let x = p.x + 30; x < p.x + p.w - 40; x += 70) ctx.fillRect(x, p.y + 4, 44, 6);
+      }
+    }
+  }
+  // portão
+  ctx.fillStyle = "#8f3e2b"; ctx.fillRect(738, MUNDO.h - 44, 14, 28); ctx.fillRect(848, MUNDO.h - 44, 14, 28);
+  rotulo("E. E. Escola Conectada", 800, MUNDO.h - 52, "#1f4d8f", "#fff");
+  for (const pl of placas) rotulo(pl.texto, pl.x, pl.y, "#1f4d8f", "#fff");
+}
+
+function rotulo(texto, x, y, fundo, cor) {
+  ctx.font = `600 13px ${FONTE}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const w = ctx.measureText(texto).width + 14;
+  ctx.fillStyle = fundo; rr(x - w / 2, y - 10, w, 20, 5); ctx.fill();
+  ctx.fillStyle = cor; ctx.fillText(texto, x, y + 1);
+  ctx.textBaseline = "alphabetic";
+}
+
+function desenharArvore(a) {
+  ctx.fillStyle = "rgba(0,0,0,.16)"; ctx.beginPath(); ctx.ellipse(a.x + 6, a.y + 4, 34, 14, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#6b4426"; ctx.fillRect(a.x - 5, a.y - 26, 10, 28);
+  ctx.fillStyle = "#4f8f3f"; ctx.beginPath(); ctx.arc(a.x, a.y - 44, 32, 0, 7); ctx.fill();
+  ctx.fillStyle = "#62a64e"; ctx.beginPath(); ctx.arc(a.x - 10, a.y - 52, 20, 0, 7); ctx.fill();
+}
+
+// personagem visto de frente (estilo "chibi"); x,y = pés
+function desenharPessoa(p, t, dir, andando) {
+  const esc = p.adulto ? 1.12 : 1;
+  const bob = andando ? Math.abs(Math.sin(t * 10)) * 2 : Math.sin(t * 2 + (p.x || 0)) * 0.8;
+  ctx.save(); ctx.translate(p.x, p.y); ctx.scale(esc, esc);
+  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(0, 0, 12, 5, 0, 0, 7); ctx.fill();
+  ctx.translate(0, -bob);
+  const costas = dir === "cima";
+  const lado = dir === "esq" ? -1 : dir === "dir" ? 1 : 0;
+  // pernas
+  const pern = andando ? Math.sin(t * 12) * 3 : 0;
+  ctx.fillStyle = p.calca; rr(-7, -12 + pern * 0.3, 6, 12, 2); ctx.fill(); rr(1, -12 - pern * 0.3, 6, 12, 2); ctx.fill();
+  // mochila (de costas aparece inteira)
+  if (p.mochila && costas) { ctx.fillStyle = p.mochila; rr(-9, -30, 18, 16, 4); ctx.fill(); }
+  // corpo
+  ctx.fillStyle = p.camisa; rr(-10, -30, 20, 20, 6); ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,.12)"; ctx.stroke();
+  // braços
+  ctx.fillStyle = p.adulto ? p.camisa : p.pele;
+  rr(-14, -28, 5, 14, 2.5); ctx.fill(); rr(9, -28, 5, 14, 2.5); ctx.fill();
+  ctx.fillStyle = p.pele; ctx.beginPath(); ctx.arc(-11.5, -13, 2.6, 0, 7); ctx.arc(11.5, -13, 2.6, 0, 7); ctx.fill();
+  if (p.mochila && !costas) { ctx.fillStyle = p.mochila; ctx.fillRect(-8, -30, 3, 14); ctx.fillRect(5, -30, 3, 14); }
+  if (p.gravata && !costas) { ctx.fillStyle = p.gravata; ctx.beginPath(); ctx.moveTo(0, -29); ctx.lineTo(3, -18); ctx.lineTo(0, -15); ctx.lineTo(-3, -18); ctx.closePath(); ctx.fill(); }
+  if (p.cracha && !costas) { ctx.fillStyle = "#fff"; ctx.fillRect(2, -24, 6, 7); ctx.fillStyle = "#2f63b5"; ctx.fillRect(2, -24, 6, 2); }
+  // cabeça
+  const cy = -41;
+  const cab = p.corCabelo;
+  if (p.cabelo === "longo") { ctx.fillStyle = cab; rr(-12, cy - 6, 24, 24, 8); ctx.fill(); }
+  if (p.cabelo === "rabo" && !costas) { ctx.fillStyle = cab; ctx.beginPath(); ctx.ellipse(lado >= 0 ? -12 : 12, cy + 4, 4, 9, 0, 0, 7); ctx.fill(); }
+  ctx.fillStyle = p.pele; ctx.beginPath(); ctx.arc(0, cy, 11, 0, 7); ctx.fill();
+  // cabelo por cima
+  ctx.fillStyle = cab;
+  if (costas) {
+    ctx.beginPath(); ctx.arc(0, cy, 11.5, 0, 7); ctx.fill();
+    if (p.cabelo === "rabo") { ctx.beginPath(); ctx.ellipse(0, cy + 10, 4, 8, 0, 0, 7); ctx.fill(); }
+  } else {
+    ctx.beginPath(); ctx.arc(0, cy - 2, 11.6, Math.PI * 1.02, Math.PI * 1.98); ctx.fill();
+    ctx.fillRect(-11.5, cy - 4, 23, 3);
+  }
+  if (p.cabelo === "coque") { ctx.beginPath(); ctx.arc(0, cy - 13, 5.5, 0, 7); ctx.fill(); }
+  if (p.cabelo === "espetado") { for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * 6 - 4, cy - 9); ctx.lineTo(i * 6, cy - 17); ctx.lineTo(i * 6 + 4, cy - 9); ctx.fill(); } }
+  // rosto
+  if (!costas) {
+    const ox = lado * 3;
+    ctx.fillStyle = "#1d1d26";
+    if (p.triste) {
+      ctx.strokeStyle = "#1d1d26"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ox - 6, cy + 2); ctx.lineTo(ox - 2, cy + 3); ctx.moveTo(ox + 2, cy + 3); ctx.lineTo(ox + 6, cy + 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(ox, cy + 9, 3, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+      ctx.fillStyle = "#7fc4ff"; ctx.beginPath(); ctx.arc(ox - 5, cy + 6, 1.6, 0, 7); ctx.fill();
+      ctx.lineWidth = 1;
+    } else {
+      ctx.beginPath(); ctx.arc(ox - 4, cy + 1, 1.8, 0, 7); ctx.arc(ox + 4, cy + 1, 1.8, 0, 7); ctx.fill();
+      ctx.strokeStyle = "#1d1d26"; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(ox, cy + 4, 3, Math.PI * 0.2, Math.PI * 0.8); ctx.stroke(); ctx.lineWidth = 1;
+      ctx.fillStyle = "rgba(230,110,110,.35)"; ctx.beginPath(); ctx.arc(ox - 7, cy + 4, 2, 0, 7); ctx.arc(ox + 7, cy + 4, 2, 0, 7); ctx.fill();
+    }
+    if (p.oculos) {
+      ctx.strokeStyle = "#1d1d26"; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(ox - 4, cy + 1, 3.6, 0, 7); ctx.moveTo(ox + 7.6, cy + 1); ctx.arc(ox + 4, cy + 1, 3.6, 0, 7); ctx.moveTo(ox - 0.4, cy + 1); ctx.lineTo(ox + 0.4, cy + 1); ctx.stroke(); ctx.lineWidth = 1;
+    }
+  }
+  ctx.restore();
+  if (p.bola) { ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x + 18, p.y - 4, 6, 0, 7); ctx.fill(); ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(p.x + 18, p.y - 4, 2.2, 0, 7); ctx.fill(); }
+}
+
+const JOGADOR_VISUAL = { pele: PELE.media, camisa: "#ffc93c", calca: "#28335c", cabelo: "curto", corCabelo: "#2d1d12", mochila: "#1f6f5c" };
+
+function desenharMarcador(x, y, t, tipo) {
+  const dy = Math.sin(t * 4) * 3;
+  ctx.save(); ctx.translate(x, y + dy);
+  ctx.fillStyle = tipo === "!" ? "#ffc93c" : "#ffffff";
+  ctx.strokeStyle = "#1f2a44"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, 10, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#1f2a44"; ctx.font = `700 14px ${FONTE}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(tipo, 0, 1); ctx.restore(); ctx.textBaseline = "alphabetic";
+}
+
+function desenharObjeto(o, t) {
+  const pegou = o.tipo === "pista" ? tem(o.id) : tem(HIST.minis[o.id].concede);
+  if (o.id === "BilheteAmassado" && !pegou) {
+    ctx.fillStyle = "#f6f2e4"; ctx.beginPath(); ctx.arc(o.x, o.y - 22, 6, 0, 7); ctx.fill(); ctx.strokeStyle = "#b9b29c"; ctx.stroke();
+  }
+  if (o.id === "RegistroLab") {
+    ctx.fillStyle = "#fff"; ctx.fillRect(o.x - 8, o.y - 50, 16, 20); ctx.strokeStyle = "#8a5a33"; ctx.strokeRect(o.x - 8, o.y - 50, 16, 20);
+    ctx.fillStyle = "#9aa3b2"; for (let i = 0; i < 4; i++) ctx.fillRect(o.x - 5, o.y - 46 + i * 4, 10, 1.5);
+  }
+  if (o.id === "AnaliseGrupo") {
+    ctx.fillStyle = "#20283a"; rr(o.x - 16, o.y + 4, 32, 18, 2); ctx.fill();
+    ctx.fillStyle = "#1f6f5c"; ctx.fillRect(o.x - 13, o.y + 7, 26, 12);
+    ctx.fillStyle = "#fff"; ctx.fillRect(o.x - 10, o.y + 9, 12, 3); ctx.fillRect(o.x - 4, o.y + 14, 14, 3);
+  }
+  if (o.id === "LinhaDoTempo") {
+    ["#fff3c9","#d9ecff","#fff3c9"].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(o.x - 34, o.y - 50 + i * 30, 7, 10); });
+  }
+  if (!pegou) {
+    const pulso = (Math.sin(t * 3) + 1) / 2;
+    ctx.strokeStyle = `rgba(255,201,60,${0.45 + pulso * 0.45})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(o.x, o.y + (o.anel ?? -26), 18 + pulso * 4, 0, 7); ctx.stroke(); ctx.lineWidth = 1;
+  }
+}
+
+function desenharNome(texto, x, y) {
+  ctx.font = `600 12px ${FONTE}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const w = ctx.measureText(texto).width + 10;
+  ctx.fillStyle = "rgba(31,42,68,.82)"; rr(x - w / 2, y - 8, w, 16, 8); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.fillText(texto, x, y + 0.5); ctx.textBaseline = "alphabetic";
+}
+
+/* ===================================================================
+   LÓGICA DE CONVERSA
+   =================================================================== */
+function dialogoAtual(id) {
+  return HIST.npcs[id].dialogos.find(d => temTodas(d.requer));
+}
+function temNovidade(id) {
+  const d = dialogoAtual(id);
+  return !!d && ((d.concede && !tem(d.concede)) || (d.abreFinal && !estado.concluido));
+}
+function objetoDisponivel(o) {
+  if (o.tipo === "pista") return !tem(o.id) && temTodas(HIST.pistas[o.id].requer);
+  const m = HIST.minis[o.id];
+  return !tem(m.concede) && temTodas(m.requer);
+}
+
+function proximoPasso() {
+  if (estado.concluido) return "Caso resolvido! Converse com a Ana ou jogue de novo pelo Menu.";
+  if (!tem("RelatoAna")) return "Encontre a Ana. Ela está sozinha perto do muro, à esquerda do portão.";
+  if (!tem("PrintGrupo")) return "Converse com a Bia, amiga da Ana, no pátio coberto.";
+  if (!tem("BilheteAmassado") || !tem("RegistroLab")) return "Fale com a Dona Célia e investigue o Laboratório de Informática.";
+  if (!tem("Encaminhamentos")) return "Analise as mensagens no computador da Coordenação.";
+  if (!tem("ArrependimentoLucas")) return "Converse com o Lucas, no fundo da Sala 8º B.";
+  if (!tem("LinhaDoTempo")) return "Monte a linha do tempo no quadro da Coordenação.";
+  return "Você tem todas as pistas. Fale com a Coord. Helena.";
+}
+
+/* ===================================================================
+   INTERFACE
+   =================================================================== */
+const $ = id => document.getElementById(id);
+const ui = { trava: 0, modal: false };
+const podeAndar = () => ui.trava === 0 && !ui.modal;
+
+function atualizarHud() {
+  const n = HIST.obrigatorias.filter(tem).length;
+  $("contPistas").textContent = `${n}/${HIST.obrigatorias.length}`;
+  $("objetivoTexto").textContent = proximoPasso();
+}
+
+function aviso(texto, tipo) {
+  const el = document.createElement("div");
+  el.className = "aviso " + (tipo || "");
+  el.textContent = texto;
+  $("avisos").appendChild(el);
+  setTimeout(() => el.remove(), 3800);
+}
+
+/* som simples */
+let somLigado = true, audio = null;
+function tom(freqs, dur) {
+  if (!somLigado) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    freqs.forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = "triangle"; o.frequency.value = f;
+      const t0 = audio.currentTime + i * dur;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g).connect(audio.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+    });
+  } catch (e) {}
+}
+$("btnSom").addEventListener("click", () => {
+  somLigado = !somLigado;
+  $("btnSom").textContent = "Som: " + (somLigado ? "ligado" : "desligado");
+  $("btnSom").setAttribute("aria-pressed", String(somLigado));
+});
+
+function concederPista(id) {
+  if (!id || tem(id)) return;
+  estado.pistas.add(id); salvar(); atualizarHud();
+  aviso("Nova pista: " + HIST.pistas[id].nome, "pista");
+  tom([660, 880, 1175], 0.12);
+  if (HIST.obrigatorias.every(tem)) setTimeout(() => aviso("Todas as pistas reunidas! Procure a Coord. Helena."), 900);
+}
+
+/* diálogo com efeito de máquina de escrever */
+let escrevendo = false, pular = false, resolverAvanco = null;
+function escrever(texto) {
+  return new Promise(res => {
+    const el = $("dlgFala"); const letras = [...texto]; let i = 0;
+    escrevendo = true; pular = false; el.textContent = "";
+    const passo = () => {
+      if (pular || i >= letras.length) { el.textContent = texto; escrevendo = false; res(); return; }
+      i++; el.textContent = letras.slice(0, i).join(""); setTimeout(passo, 16);
+    };
+    passo();
+  });
+}
+function avancar() {
+  if ($("dialogo").hidden) return;
+  if (escrevendo) { pular = true; return; }
+  if (resolverAvanco) { const r = resolverAvanco; resolverAvanco = null; r(); }
+}
+$("dlgSeguir").addEventListener("click", e => { e.stopPropagation(); avancar(); });
+$("dialogo").addEventListener("click", e => { if (!e.target.closest(".escolha")) avancar(); });
+
+async function falar(nome, papel, falas, escolhas) {
+  ui.trava++;
+  const caixa = $("dialogo");
+  $("dlgQuem").innerHTML = "";
+  $("dlgQuem").append(nome);
+  if (papel) { const s = document.createElement("small"); s.textContent = papel; $("dlgQuem").append(s); }
+  $("dlgEscolhas").innerHTML = "";
+  caixa.hidden = false;
+  for (let i = 0; i < falas.length; i++) {
+    $("dlgSeguir").hidden = false;
+    await escrever(falas[i]);
+    if (i === falas.length - 1 && escolhas) break;
+    $("dlgSeguir").focus({ preventScroll: true });
+    await new Promise(r => { resolverAvanco = r; });
+  }
+  let escolhida = null;
+  if (escolhas) {
+    $("dlgSeguir").hidden = true;
+    escolhida = await new Promise(res => {
+      escolhas.forEach((t, i) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "escolha"; b.textContent = t;
+        b.addEventListener("click", e => { e.stopPropagation(); res(i); });
+        $("dlgEscolhas").appendChild(b);
+      });
+      $("dlgEscolhas").firstChild.focus({ preventScroll: true });
+    });
+    $("dlgEscolhas").innerHTML = "";
+  }
+  caixa.hidden = true;
+  ui.trava--;
+  return escolhida;
+}
+
+async function conversar(id) {
+  const npc = HIST.npcs[id]; const d = dialogoAtual(id); if (!d) return;
+  ui.trava++;
+  try {
+    tom([520], 0.06);
+    if (d.escolhas) {
+      const i = await falar(npc.nome, npc.papel, d.falas, d.escolhas.map(e => e.texto));
+      const e = d.escolhas[i];
+      await falar(npc.nome, npc.papel, e.resposta);
+      if (e.correta) concederPista(d.concede); else tom([330, 262], 0.15);
+    } else {
+      await falar(npc.nome, npc.papel, d.falas);
+      if (d.concede) concederPista(d.concede);
+      if (d.abreFinal && !estado.concluido) await reuniaoFinal();
+      else if (d.abreFinal && estado.concluido) await telaVitoria();
+    }
+  } finally { ui.trava--; }
+}
+
+async function examinar(o) {
+  ui.trava++;
+  try {
+    if (o.tipo === "pista") {
+      const p = HIST.pistas[o.id];
+      if (!temTodas(p.requer)) { await falar("Hmm...", "", [p.bloqueado]); return; }
+      const nova = !tem(o.id);
+      await falar(p.nome, nova ? "Pista encontrada!" : "Já anotada", [p.desc]);
+      concederPista(o.id);
+    } else {
+      const m = HIST.minis[o.id];
+      if (tem(m.concede)) { aviso("Você já concluiu este desafio."); return; }
+      if (!temTodas(m.requer)) { await falar(m.titulo, "", [m.bloqueado]); return; }
+      if (m.tipo === "classificar") await jogoClassificar(m); else await jogoOrdenar(m);
+    }
+  } finally { ui.trava--; }
+}
+
+/* ===================================================================
+   JANELAS (caderno, menu, desafios, reunião, vitória)
+   =================================================================== */
+function abrirJanela(montar, classe) {
+  return new Promise(res => {
+    ui.modal = true;
+    const fundo = document.createElement("div"); fundo.className = "fundo-modal";
+    const folha = document.createElement("div"); folha.className = "folha " + (classe || "");
+    folha.setAttribute("role", "dialog"); folha.setAttribute("aria-modal", "true");
+    fundo.appendChild(folha); $("modais").appendChild(fundo);
+    const fechar = valor => { fundo.remove(); ui.modal = $("modais").children.length > 0; res(valor); };
+    montar(folha, fechar);
+    const foco = folha.querySelector("button, input"); if (foco) foco.focus({ preventScroll: true });
+  });
+}
+function el(tag, props, filhos) {
+  const e = document.createElement(tag);
+  Object.entries(props || {}).forEach(([k, v]) => { if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); });
+  (filhos || []).forEach(f => f && e.appendChild(typeof f === "string" ? document.createTextNode(f) : f));
+  return e;
+}
+
+function abrirCaderno() {
+  if (ui.modal) return;
+  abrirJanela((f, fechar) => {
+    f.append(el("h2", { text: "Caderno de Pistas" }), el("p", { class: "sub", text: `${HIST.obrigatorias.filter(tem).length} de ${HIST.obrigatorias.length} pistas encontradas` }));
+    const lista = el("div", { class: "pistas" });
+    HIST.obrigatorias.forEach((id, i) => {
+      const p = HIST.pistas[id]; const ok = tem(id);
+      lista.append(el("div", { class: "pista" + (ok ? "" : " falta") }, [
+        el("span", { class: "n", text: String(i + 1) }),
+        el("h3", { text: ok ? p.nome : "???" }),
+        el("p", { text: ok ? p.desc : "Pista ainda não encontrada." })
+      ]));
+    });
+    f.append(lista, el("div", { class: "linha-botoes" }, [el("button", { class: "btn", type: "button", text: "Fechar", "data-fechar": "1", onclick: () => fechar() })]));
+  });
+}
+$("btnCaderno").addEventListener("click", abrirCaderno);
+
+function abrirMenu() {
+  if (ui.modal) return;
+  abrirJanela((f, fechar) => {
+    f.append(
+      el("h2", { text: "Menu" }),
+      el("p", { class: "sub", text: "O Caso da Foto no Grupo" }),
+      el("p", {}, [el("b", { text: "Como jogar: " }), "ande pela escola, converse com as pessoas, examine os objetos que brilham e resolva os desafios. O quadro no alto da tela mostra o próximo passo."]),
+      el("p", {}, [el("b", { text: "Teclado: " }), "setas ou W A S D para andar, E ou Espaço para conversar, C para o caderno."]),
+      el("p", {}, [el("b", { text: "Celular e tablet: " }), "arraste o dedo na tela para andar e toque no botão amarelo para conversar."]),
+      el("p", {}, [el("b", { text: "Para professores: " }), "o jogo trabalha empatia ao abordar a vítima, a responsabilidade de quem compartilha, a diferença entre mensagens que ajudam e que machucam, a importância de guardar provas e procurar um adulto, e a resolução por acolhimento e reparação. Nenhum dado do aluno é coletado: o progresso fica só neste navegador."]),
+      el("div", { class: "linha-botoes" }, [
+        el("button", { class: "btn nao", type: "button", text: "Recomeçar do zero", onclick: () => { fechar(); recomecar(); } }),
+        el("button", { class: "btn", type: "button", text: "Voltar ao jogo", "data-fechar": "1", onclick: () => fechar() })
+      ])
+    );
+  });
+}
+$("btnMenu").addEventListener("click", abrirMenu);
+
+function recomecar() {
+  estado.pistas.clear(); estado.concluido = false; salvar();
+  jogador.x = 800; jogador.y = 1040; jogador.dir = "cima";
+  atualizarHud(); aviso("Investigação reiniciada.");
+}
+
+/* desafio 1: classificar mensagens do grupo */
+function jogoClassificar(m) {
+  return abrirJanela((f, fechar) => {
+    const respostas = [];
+    f.append(el("h2", { text: m.titulo }), el("p", { class: "sub", text: m.instrucao }));
+    const corpo = el("div", { class: "chat-corpo" });
+    const botoes = el("div", { class: "chat-botoes" });
+    const chat = el("div", { class: "chat" }, [
+      el("div", { class: "chat-topo" }, [el("div", { class: "av", text: "8B" }), el("div", {}, [el("b", { text: "8º B Oficial" }), el("small", { text: "32 participantes · cópia entregue à coordenação" })])]),
+      corpo, botoes
+    ]);
+    f.append(chat);
+    const rodape = el("div", { class: "linha-botoes" }, [el("button", { class: "btn sec", type: "button", text: "Sair", "data-fechar": "1", onclick: () => fechar() })]);
+    f.append(rodape);
+
+    function bolha(item) {
+      return el("div", { class: "bolha" }, [el("div", { class: "autor", text: item.autor }), el("div", { class: "txt", text: item.texto }), el("div", { class: "meta", text: item.hora })]);
+    }
+    function mostrar() {
+      const i = respostas.length;
+      if (i >= m.itens.length) return terminar();
+      const b = bolha(m.itens[i]); corpo.appendChild(b); corpo.scrollTop = corpo.scrollHeight;
+      botoes.innerHTML = "";
+      const resp = ofensiva => { respostas.push(ofensiva); b.appendChild(el("span", { class: "etq " + (ofensiva ? "machuca" : "ajuda"), text: ofensiva ? "Você marcou: machuca" : "Você marcou: ajuda" })); tom([ofensiva ? 392 : 587], 0.07); mostrar(); };
+      botoes.append(
+        el("button", { class: "btn ok", type: "button", text: "Ajuda (respeitosa)", onclick: () => resp(false) }),
+        el("button", { class: "btn nao", type: "button", text: "Machuca (ofensiva)", onclick: () => resp(true) })
+      );
+      botoes.firstChild.focus({ preventScroll: true });
+    }
+    function terminar() {
+      const acertos = m.itens.filter((it, i) => respostas[i] === it.ofensiva).length;
+      const passou = acertos >= m.minimo;
+      corpo.innerHTML = "";
+      m.itens.forEach((it, i) => {
+        const b = bolha(it);
+        const certo = respostas[i] === it.ofensiva;
+        b.appendChild(el("span", { class: "etq " + (it.ofensiva ? "machuca" : "ajuda"), text: (certo ? "✓ " : "✗ ") + (it.ofensiva ? "Machuca" : "Ajuda") }));
+        corpo.appendChild(b);
+      });
+      botoes.innerHTML = "";
+      botoes.style.gridTemplateColumns = "1fr";
+      botoes.append(el("p", { text: passou ? `Muito bem! Você acertou ${acertos} de ${m.itens.length}. Repare: quem pediu para parar e quem procurou um adulto ajudou a Ana.` : `Você acertou ${acertos} de ${m.itens.length}. Precisa de pelo menos ${m.minimo}. Veja as respostas acima e tente de novo.` }));
+      rodape.innerHTML = "";
+      if (passou) {
+        rodape.append(el("button", { class: "btn", type: "button", text: "Anotar pista", onclick: () => { fechar(); concederPista(m.concede); } }));
+      } else {
+        tom([330, 262], 0.15);
+        rodape.append(
+          el("button", { class: "btn sec", type: "button", text: "Sair", "data-fechar": "1", onclick: () => fechar() }),
+          el("button", { class: "btn", type: "button", text: "Tentar de novo", onclick: () => { botoes.style.gridTemplateColumns = ""; respostas.length = 0; corpo.innerHTML = ""; rodape.innerHTML = ""; rodape.append(el("button", { class: "btn sec", type: "button", text: "Sair", "data-fechar": "1", onclick: () => fechar() })); mostrar(); } })
+        );
+      }
+      rodape.lastChild.focus({ preventScroll: true });
+    }
+    mostrar();
+  });
+}
+
+/* desafio 2: linha do tempo */
+function embaralhar(a) { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
+function jogoOrdenar(m) {
+  return abrirJanela((f, fechar) => {
+    const ordem = [];
+    let embaralhados = embaralhar(m.eventos);
+    while (embaralhados.every((e, i) => e.id === m.eventos[i].id)) embaralhados = embaralhar(m.eventos);
+    f.append(el("h2", { text: m.titulo }), el("p", { class: "sub", text: m.instrucao }));
+    const cartoes = el("div", { class: "cartoes" });
+    const trilha = el("div", { class: "trilha" });
+    const msg = el("p", { class: "explica", text: "Dica: comece pelo que aconteceu primeiro, na aula de Educação Física." });
+    f.append(el("div", { class: "colunas" }, [
+      el("div", {}, [el("p", { class: "rotulo", text: "Acontecimentos" }), cartoes]),
+      el("div", {}, [el("p", { class: "rotulo", text: "Sua linha do tempo" }), trilha])
+    ]), msg);
+    const btDesfazer = el("button", { class: "btn sec", type: "button", text: "Desfazer", onclick: () => { ordem.pop(); desenhar(); } });
+    const btConfirmar = el("button", { class: "btn", type: "button", text: "Confirmar", onclick: confirmar });
+    f.append(el("div", { class: "linha-botoes" }, [el("button", { class: "btn sec", type: "button", text: "Sair", "data-fechar": "1", onclick: () => fechar() }), btDesfazer, btConfirmar]));
+
+    function desenhar(certos) {
+      cartoes.innerHTML = ""; trilha.innerHTML = "";
+      embaralhados.forEach(ev => {
+        if (ordem.includes(ev)) return;
+        cartoes.appendChild(el("button", { class: "cartao", type: "button", text: ev.texto, onclick: () => { ordem.push(ev); tom([523], 0.05); desenhar(); } }));
+      });
+      if (!ordem.length) trilha.appendChild(el("p", { class: "vazio", text: "Toque nos cartões ao lado, do primeiro ao último acontecimento." }));
+      ordem.forEach((ev, i) => trilha.appendChild(el("div", { class: "item" + (certos && i < certos ? " certo" : "") }, [el("b", { text: String(i + 1) }), el("span", { text: ev.texto })])));
+      btConfirmar.disabled = ordem.length !== m.eventos.length;
+      btDesfazer.disabled = !ordem.length;
+    }
+    function confirmar() {
+      let certos = 0; while (certos < ordem.length && ordem[certos].id === m.eventos[certos].id) certos++;
+      if (certos === m.eventos.length) {
+        tom([523, 659, 784], 0.1);
+        desenhar(certos);
+        msg.textContent = "Linha do tempo correta! Agora dá para entender como uma brincadeira de mau gosto virou um caso de cyberbullying.";
+        btConfirmar.remove(); btDesfazer.remove();
+        const anotar = el("button", { class: "btn", type: "button", text: "Anotar pista", onclick: () => { fechar(); concederPista(m.concede); } });
+        f.querySelector(".linha-botoes").appendChild(anotar); anotar.focus({ preventScroll: true });
+      } else {
+        tom([330, 262], 0.15);
+        ordem.splice(certos);
+        desenhar(certos);
+        msg.textContent = certos === 0 ? "O primeiro acontecimento ainda não está certo. O que aconteceu antes de tudo?" : `Os ${certos === 1 ? "primeiro está certo" : certos + " primeiros estão certos"}. Guardei ${certos === 1 ? "ele" : "eles"} para você. Continue a partir daí.`;
+      }
+    }
+    desenhar();
+  });
+}
+
+/* reunião final */
+function reuniaoFinal() {
+  return abrirJanela((f, fechar) => {
+    const P = HIST.final.perguntas; let i = 0, acertos = 0;
+    function mostrar() {
+      f.innerHTML = "";
+      const q = P[i];
+      const prog = el("div", { class: "progresso" }); P.forEach((_, k) => prog.appendChild(el("i", { class: k < i ? "feito" : "" })));
+      f.append(prog, el("p", { class: "rotulo", text: `Reunião final · pergunta ${i + 1} de ${P.length}` }), el("h2", { text: q.pergunta }));
+      const ops = el("div", { class: "opcoes" });
+      const rodape = el("div", { class: "linha-botoes" });
+      q.opcoes.forEach((texto, k) => {
+        ops.appendChild(el("button", { class: "opcao", type: "button", text: texto, onclick: () => responder(k) }));
+      });
+      f.append(ops);
+      function responder(k) {
+        const botoes = [...ops.children]; botoes.forEach(b => b.disabled = true);
+        const certo = k === q.correta; if (certo) acertos++;
+        botoes[q.correta].classList.add("certa"); if (!certo) botoes[k].classList.add("errada");
+        tom(certo ? [659, 880] : [330, 262], 0.12);
+        f.append(el("div", { class: "explica" }, [el("b", { text: certo ? "Isso mesmo! " : "Não é bem assim. " }), q.explicacao]), rodape);
+        const prox = el("button", { class: "btn", type: "button", text: i < P.length - 1 ? "Próxima pergunta" : "Ver resultado", onclick: () => { i++; i < P.length ? mostrar() : resultado(); } });
+        rodape.appendChild(prox); prox.focus({ preventScroll: true });
+      }
+    }
+    function resultado() {
+      if (acertos === P.length) { fechar(); estado.concluido = true; salvar(); atualizarHud(); telaVitoria(); return; }
+      f.innerHTML = "";
+      f.append(el("h2", { text: "Quase lá" }), el("p", { class: "sub", text: `Você acertou ${acertos} de ${P.length} perguntas.` }),
+        el("p", { text: "Releia o Caderno de Pistas e tente de novo. Para fechar o caso, todas as respostas precisam estar certas." }),
+        el("div", { class: "linha-botoes" }, [
+          el("button", { class: "btn sec", type: "button", text: "Fechar", "data-fechar": "1", onclick: () => fechar() }),
+          el("button", { class: "btn", type: "button", text: "Tentar de novo", onclick: () => { i = 0; acertos = 0; mostrar(); } })
+        ]));
+    }
+    mostrar();
+  });
+}
+
+function telaVitoria() {
+  tom([523, 659, 784, 1047], 0.14);
+  return abrirJanela((f, fechar) => {
+    const nomeEl = el("div", { class: "nome", text: "Agente da Escola Conectada" });
+    const entrada = el("input", { id: "nomeCertificado", type: "text", maxlength: "30", placeholder: "Escreva seu nome aqui", "aria-label": "Seu nome no certificado" });
+    entrada.addEventListener("input", () => { nomeEl.textContent = entrada.value.trim() || "Agente da Escola Conectada"; });
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    f.append(
+      el("h2", { text: "Caso resolvido!" }),
+      el("p", { class: "sub", text: "Você ajudou a Ana e toda a turma." }),
+      el("div", { class: "certificado" }, [
+        el("div", { class: "t", text: "Certificado de Detetive do Respeito" }),
+        nomeEl,
+        el("div", { text: `resolveu "O Caso da Foto no Grupo" em ${hoje}` }),
+        entrada
+      ]),
+      ...HIST.final.vitoria.map(t => el("p", { text: t })),
+      el("div", { class: "ajuda-box" }, [el("b", { text: "Precisa de ajuda? " }), "Converse com um adulto de confiança. Você também pode ligar para o Disque 100 (Direitos Humanos) ou procurar o canal de ajuda da SaferNet Brasil."]),
+      el("div", { class: "linha-botoes" }, [
+        el("button", { class: "btn sec", type: "button", text: "Jogar de novo", onclick: () => { fechar(); recomecar(); } }),
+        el("button", { class: "btn", type: "button", text: "Continuar passeando", onclick: () => fechar() })
+      ])
+    );
+  });
+}
+
+/* capa */
+function abrirCapa() {
+  const salvo = estado.pistas.size > 0 || estado.concluido;
+  abrirJanela((f, fechar) => {
+    const toque = document.body.classList.contains("toque");
+    f.append(
+      el("span", { class: "selo", text: "Escola Conectada Sem Bullying" }),
+      el("h1", {}, ["O Caso da ", el("em", { text: "Foto" }), " no Grupo"]),
+      ...HIST.intro.map(t => el("p", { text: t })),
+      el("div", { class: "controles" }, [
+        el("div", {}, [el("b", { text: toque ? "Andar" : "Andar" }), toque ? "Arraste o dedo na tela" : "Setas ou W A S D"]),
+        el("div", {}, [el("b", { text: "Conversar e examinar" }), toque ? "Botão amarelo" : "Tecla E ou Espaço"]),
+        el("div", {}, [el("b", { text: "Caderno de Pistas" }), toque ? "Botão Caderno, no alto" : "Tecla C"])
+      ]),
+      el("div", { class: "linha-botoes" }, [
+        salvo ? el("button", { class: "btn sec", type: "button", text: "Começar do zero", onclick: () => { fechar(); recomecar(); } }) : null,
+        el("button", { class: "btn", type: "button", text: salvo ? "Continuar investigação" : "Começar investigação", onclick: () => { fechar(); tom([523, 784], 0.1); } })
+      ])
+    );
+  }, "capa");
+}
+
+/* ===================================================================
+   CONTROLES
+   =================================================================== */
+const teclas = new Set();
+const ehToque = window.matchMedia("(pointer: coarse)").matches;
+if (ehToque) { document.body.classList.add("toque"); $("dicaToque").hidden = false; }
+
+window.addEventListener("keydown", e => {
+  const k = e.key.toLowerCase();
+  if (e.target.tagName === "INPUT") return;
+  if (!$("dialogo").hidden && (k === "e" || k === " " || k === "enter")) {
+    if (!document.activeElement || !document.activeElement.classList.contains("escolha")) { e.preventDefault(); avancar(); }
+    return;
+  }
+  if (ui.modal) { if (k === "escape") { const fundos = $("modais").children; const ultimoFundo = fundos[fundos.length - 1]; const b = ultimoFundo && ultimoFundo.querySelector("[data-fechar]"); if (b) b.click(); } return; }
+  if (["arrowup","arrowdown","arrowleft","arrowright","w","a","s","d"].includes(k)) { teclas.add(k); e.preventDefault(); }
+  if ((k === "e" || k === " " || k === "enter") && alvoAtual && podeAndar()) { e.preventDefault(); interagir(); }
+  if (k === "c" && podeAndar()) abrirCaderno();
+});
+window.addEventListener("keyup", e => teclas.delete(e.key.toLowerCase()));
+window.addEventListener("blur", () => teclas.clear());
+
+// joystick por toque/arrasto
+const joy = { ativo: false, id: null, cx: 0, cy: 0, dx: 0, dy: 0 };
+cv.addEventListener("pointerdown", e => {
+  if (!$("dialogo").hidden) { avancar(); return; }
+  if (!podeAndar()) return;
+  joy.ativo = true; joy.id = e.pointerId; joy.cx = e.clientX; joy.cy = e.clientY; joy.dx = joy.dy = 0;
+  cv.setPointerCapture(e.pointerId);
+  const j = $("joy"); j.style.left = e.clientX + "px"; j.style.top = e.clientY + "px"; j.hidden = false; $("joyBola").style.transform = "";
+  $("dicaToque").hidden = true;
+});
+cv.addEventListener("pointermove", e => {
+  if (!joy.ativo || e.pointerId !== joy.id) return;
+  let dx = e.clientX - joy.cx, dy = e.clientY - joy.cy;
+  const d = Math.hypot(dx, dy), max = 45;
+  if (d > max) { dx = dx / d * max; dy = dy / d * max; }
+  joy.dx = dx / max; joy.dy = dy / max;
+  $("joyBola").style.transform = `translate(${dx}px, ${dy}px)`;
+});
+const soltar = e => { if (e.pointerId !== joy.id) return; joy.ativo = false; joy.dx = joy.dy = 0; $("joy").hidden = true; };
+cv.addEventListener("pointerup", soltar); cv.addEventListener("pointercancel", soltar);
+
+$("interagir").addEventListener("click", () => { if (alvoAtual && podeAndar()) interagir(); });
+
+/* ===================================================================
+   LAÇO DO JOGO
+   =================================================================== */
+let alvoAtual = null;
+function interagir() {
+  const a = alvoAtual; if (!a) return;
+  $("interagir").hidden = true;
+  if (a.npc) conversar(a.npc.id); else examinar(a.obj);
+}
+
+function colide(x, y) {
+  const r = { x: x - 8, y: y - 6, w: 16, h: 8 };
+  return solidos.some(s => r.x < s.x + s.w && r.x + r.w > s.x && r.y < s.y + s.h && r.y + r.h > s.y);
+}
+
+function atualizar(dt) {
+  let vx = 0, vy = 0;
+  if (podeAndar()) {
+    if (teclas.has("arrowleft") || teclas.has("a")) vx -= 1;
+    if (teclas.has("arrowright") || teclas.has("d")) vx += 1;
+    if (teclas.has("arrowup") || teclas.has("w")) vy -= 1;
+    if (teclas.has("arrowdown") || teclas.has("s")) vy += 1;
+    if (joy.ativo) { vx += joy.dx; vy += joy.dy; }
+  }
+  const mag = Math.hypot(vx, vy);
+  jogador.andando = mag > 0.15;
+  if (jogador.andando) {
+    if (mag > 1) { vx /= mag; vy /= mag; }
+    const vel = 170 * dt;
+    const nx = jogador.x + vx * vel, ny = jogador.y + vy * vel;
+    if (!colide(nx, jogador.y)) jogador.x = nx;
+    if (!colide(jogador.x, ny)) jogador.y = ny;
+    jogador.dir = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? "esq" : "dir") : (vy < 0 ? "cima" : "baixo");
+  }
+  // alvo de interação mais próximo
+  let melhor = null, dmin = 70;
+  for (const n of NPCS) { const d = Math.hypot(n.x - jogador.x, n.y - jogador.y); if (d < dmin) { dmin = d; melhor = { npc: n }; } }
+  for (const o of OBJETOS) { const d = Math.hypot(o.x - jogador.x, o.y - jogador.y); if (d < dmin) { dmin = d; melhor = { obj: o }; } }
+  alvoAtual = melhor;
+  const btn = $("interagir");
+  if (melhor && podeAndar()) {
+    $("interagirTexto").textContent = melhor.npc ? "Conversar com " + HIST.npcs[melhor.npc.id].nome : melhor.obj.rotulo;
+    btn.hidden = false;
+  } else btn.hidden = true;
+}
+
+function desenhar(t) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#6fa552"; ctx.fillRect(0, 0, larg, alt);
+  // câmera
+  const vw = larg / zoom, vh = alt / zoom;
+  let camX = jogador.x - vw / 2, camY = jogador.y - vh / 2 - 20;
+  camX = vw >= MUNDO.w ? (MUNDO.w - vw) / 2 : Math.max(-20, Math.min(MUNDO.w - vw + 20, camX));
+  camY = vh >= MUNDO.h ? (MUNDO.h - vh) / 2 : Math.max(-20, Math.min(MUNDO.h - vh + 20, camY));
+  ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, -camX * dpr * zoom, -camY * dpr * zoom);
+
+  desenharPisos();
+  desenharMoveis(t);
+  desenharParedes();
+  for (const o of OBJETOS) desenharObjeto(o, t);
+
+  // entidades ordenadas por profundidade
+  const lista = [];
+  NPCS.forEach(n => lista.push({ y: n.y, f: () => desenharPessoa(n, t, n.olhar, false) }));
+  altos.forEach(a => lista.push({ y: a.y, f: () => desenharArvore(a) }));
+  lista.push({ y: jogador.y, f: () => desenharPessoa(Object.assign({ x: jogador.x, y: jogador.y }, JOGADOR_VISUAL), t, jogador.dir, jogador.andando) });
+  lista.sort((a, b) => a.y - b.y).forEach(e => e.f());
+
+  // nomes e marcadores
+  NPCS.forEach(n => {
+    const topo = n.y - (n.adulto ? 64 : 58);
+    desenharNome(HIST.npcs[n.id].nome, n.x, topo);
+    if (!estado.concluido && temNovidade(n.id)) desenharMarcador(n.x, topo - 22, t, "!");
+  });
+  OBJETOS.forEach(o => { if (objetoDisponivel(o)) desenharMarcador(o.x, o.y - 62, t, "?"); });
+  if (alvoAtual) {
+    const a = alvoAtual.npc || alvoAtual.obj;
+    ctx.strokeStyle = "rgba(255,201,60,.9)"; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.ellipse(a.x, a.y, 20, 8, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+  }
+}
+
+let ultimo = performance.now();
+function quadro(agora) {
+  const dt = Math.min(0.05, (agora - ultimo) / 1000); ultimo = agora;
+  atualizar(dt); desenhar(agora / 1000);
+  requestAnimationFrame(quadro);
+}
+
+/* ===================================================================
+   INÍCIO
+   =================================================================== */
+function iniciar(dados) {
+  const salvo = (dados && Array.isArray(dados.pistas)) ? dados : carregarSalvo();
+  if (salvo) { salvo.pistas.forEach(id => HIST.pistas[id] && estado.pistas.add(id)); estado.concluido = !!salvo.concluido; }
+  if (dados && typeof dados.x === "number") { jogador.x = dados.x; jogador.y = dados.y; }
+  atualizarHud();
+  requestAnimationFrame(quadro);
+  if (!dados || typeof dados.x !== "number") abrirCapa();
+}
+try { window.claude?.hot?.snapshot?.(() => ({ pistas: [...estado.pistas], concluido: estado.concluido, x: jogador.x, y: jogador.y })); } catch (e) {}
+const comecar = () => { const h = window.claude?.hot; if (h?.ready) h.ready(iniciar); else iniciar(h?.data); };
+(document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(comecar, comecar);
+})();
+</script>
+</body></html>
